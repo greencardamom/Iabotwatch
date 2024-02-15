@@ -11,16 +11,11 @@ How it works
 
 * moniabw.awk runs from cron every 5 minutes to check that iabotwatch.csh is running and if not starts iabotwatch.csh
 
-* iabotwatch.csh runs curl pulling an EventStream (ES) and pipes the stream through iabotwatch.awk
-** ES halts on the MediaWiki side about every 15 minutes, so the script has an endless loop that restarts the curl command
-** During the restarts, the script shuffles data files around, makes new directories as months and years roll over, etc..
+* iabotwatch.csh runs curl pulling an EventStream (ES) and pipes the stream through iabotwatch.awk - ES halts on the MediaWiki side about every 15 minutes, so the script has an endless loop that restarts the curl command. During the restarts, the script shuffles data files around, makes new directories as months and years roll over, etc..
 
-* iabotwatch.awk takes as input a single JSON record from the ES. 
-** It parses the JSON and records the statistics in the ~/www/db/<year>/<day>.txt file
-** It records other things like URLs with an archive.org/details etc.. whatever we want to track
+* iabotwatch.awk takes as input a single JSON record from the ES. It parses the JSON and records the statistics in the ~/www/db/<year>/<day>.txt file. It records other things like URLs with an archive.org/details etc.. whatever we want to track
 
-* makehtml.awk runs about once an hour. 
-** It rebuilds the HTML files in ~/www/<year> by parsing the data files in  ~/www/db/<year>
+* makehtml.awk runs about once an hour. It rebuilds the HTML files in ~/www/<year> by parsing the data files in  ~/www/db/<year>
 
 For an understanding how the ~/www/db files are structured, see ~/www/db/Documentation.txt
 
