@@ -2,8 +2,6 @@ Iabotwatch
 ===========
 Iabotwatch creates tables showing the number of edits by IABot, GreenC bot, users etc.. based on the input of MediaWiki EventStream API 
 
-* https://tools-static.wmflabs.org/botwikiawk/dashdaily.html
-
 The product is "InternetArchiveBot Dashboard" and the program that generates it is "Iabotwatch".
 
 How it works
