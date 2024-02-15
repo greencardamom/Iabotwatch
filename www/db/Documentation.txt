@@ -1,0 +1,105 @@
+
+		           Data file formats
+		_____________________________________
+
+
+Each year has a directory in:
+
+	https://tools-static.wmflabs.org/botwikiawk/dashdaily/db/
+        Toolforge: /data/project/botwikiawk/iabotwatch/db
+
+Files:
+
+	001.txt -> 366.txt	1 file per day-of-year. 
+
+		File format example:
+			en 1234567 1 0 0 0 0 0
+
+		field 1: language site 
+		field 2: revision ID. To view a revision:
+                         https://en.wikipedia.org/w/index.php?diff=1013481735
+			 https://www.mediawiki.org/wiki/API:Revisions
+		field 3: number of Waback URLs added by IABot
+		field 4: number of archive.org/details links added by an IA bot
+                field 5: number of archive.org/details links added by other means
+                field 6: number of Wayback URLs added by Users
+                field 7: number of Wayback URLs added by other bots
+                field 8: number of sim_ books added by IABot
+
+        001.details.txt -> 366.details.txt 	Book IDs added. 1 file per day-of-year. 
+
+        001.italic.txt -> 366.italic.txt        If a cell is italic ("1") or not (see FAQ B.2 below)
+
+	active_01.txt -> active_12.txt	List of sites active during a month (01-12)
+
+	totals_01.txt -> totals_12.txt	Totals (last column) for a month (01-12)
+
+	calendar.txt	Map day-of-year to calendar date.
+
+
+
+		                 FAQ
+		_____________________________________
+
+A. How does it work?
+
+	It monitors EventStreams to pick up new URL additions made by User:InternetArchiveBot
+        across all Wikimedia projects.
+
+B. How accurate?
+
+	There are a number of issues related to EventStreams
+
+		1. If an existing URL is changed to a new destination such as "http" to "https" 
+                   it will be counted as a new URL. If the change is encoding-only such as 
+                   "/" to "%2F" it will not be considered a new URL.
+
+                2. If an article was 'imported' from one Wiki to another by a Wikipedia user (special process),
+                   the bot is credited for the links it added in the original Wiki then imported to the new Wiki.
+                   However, the bot did not actually edit the new Wiki and thus it's User Contributions page
+                   does not show edits by the bot, these are marked in italic font in the table. In addition,
+                   if the entire row is italic it means the bot is not active on the site and the second column
+                   language id is marked with a grey box and not counted towards the total number of active sites.
+
+		3. It does not monitor deletions. Thus if a URL is added and then deleted in
+		   a subsequent edit, the URL is still considered added for counting purposes.
+
+C. How to generate stats
+
+For number of diffs 
+
+ls | grep -E "^[0-9]{1,3}.txt" | xargs cat | awk '{if($7 > 0) {z++; print z ". https://" $1 ".wikipedia.org/w/index.php?diff=" $2}}' | tail
+
+For number of links
+
+ls | grep -E "^[0-9]{1,3}.txt" | xargs cat | awk '{if($8 > 0){k=k+int($8)}}END{print k}'
+
+Dashboard stats for 2021 as of November 20
+
+Wayback links
+Number of diffs (edits) by IABot to add/modify Wayback links: 2,728,824
+Number of Wayback links added/modified by IABot (for any reason): 4,357,913
+
+Number of diffs by users to add/modify Waback links:  634,997 (stats began in June)
+Number of Wayback links added/modified by users: 1,602,780
+
+Number of diffs by other bots to add/modify Wayback links: 1,246,461 (stats began in June)
+Number of Wayback links added/modified by other bots: 2,320,485 (includes ruwikinews 1.7M)
+
+Book links
+Number of diffs to add /details/ links (books) with LAMP:  183,669
+Number of /details/ links (books) added by LAMP: 256,208
+
+Number of diffs to /details/ links (books and sim) by non-bot users: 174,363
+Number of /details/ links (books and sim) added: 228,972
+
+Sim links
+Number of diffs to add /details/ links (sim) with LAMP:  24,269 (stats began in August)
+Number of /details/ links (sim) added by LAMP: 39,492
+
+
+Number of unique SIM IDs
+ls | grep -E "^[0-9]{1,3}.details.txt" | xargs cat | awk '{if($1 ~ "sim_") T[$1] = 1}END{print length(T)}'
+
+Number of unique Books IDs (including SIM)
+ls | grep -E "^[0-9]{1,3}.details.txt" | xargs cat | awk '{T[$1] = 1}END{print length(T)}'
