@@ -30,14 +30,12 @@
 BEGIN { # Bot cfg
 
   _defaults = "home      = /home/greenc/toolforge/iabotwatch/ \
-               email     = dfgf56greencard93@nym.hush.com \
                version   = 1.0 \
                copyright = 2024"
 
   asplit(G, _defaults, "[ ]*[=][ ]*", "[ ]{9,}")
   BotName = "iabotwatch"
   Home = G["home"]
-  Agent = "Ask me about " BotName " - " G["email"]
   Engine = 3
 
   IGNORECASE = 1
@@ -233,7 +231,7 @@ function navGen(class,  prev,nex,curr) {
 function MetaRedirect(url,      str) {
 
     str = "\
-        <!DOCTYPE html PUBLIC \"-//W3C//DTD HTML 4.01//EN\" \"http://www.w3.org/TR/html4/strict.dtd\">\n\
+        <!DOCTYPE html>\n\
         <html><title>InternetArchiveBot Dashboard Daily Redirect</title>\n\
         <head><meta http-equiv=\"Content-Type\"\n\
         content=\"text/html; charset=utf-8\">\n\
@@ -393,8 +391,8 @@ function makeTableYearly(A, C, L, class,  k,c,b,i,year,totalbysite,r) {
 #
 function makePageYearly( i,k,r,b,c,month,totalbysite,date,url) {
 
-  if(checkexists(G["home"] "headerdashdaily.html") && checkexists(G["home"] "footer.html") ) 
-    print readfile(G["home"] "headerdashdaily.html") > P["htmlY"]
+  if(checkexists(G["home"] "headerdashyearly.html") && checkexists(G["home"] "footer.html") ) 
+    print readfile(G["home"] "headerdashyearly.html") > P["htmlY"]
   else
     return
 
@@ -1309,8 +1307,8 @@ function makeLive(  new) {
   new = gsubi("Z1", "", P["htmlY"])
   sys2var(Exe["mv"] " " shquote(P["htmlY"]) " " shquote(new))
 
-  sys2var("/home/greenc/toolforge/scripts/push iabotwatchroot")
-  sys2var("/home/greenc/toolforge/scripts/push iabotwatch")
+  sys2var("/home/greenc/toolforge/scripts/push iabotwatchroot v")
+  sys2var("/home/greenc/toolforge/scripts/push iabotwatch v")
 
 }
 
