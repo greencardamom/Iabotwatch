@@ -228,6 +228,8 @@ BEGIN {
         # print book IDs to stdout (logroll) and to details.txt
         if(length(URLB1) > 0) {
           for(u in URLB1) {
+            if(u ~ /[?]query/) # garbage data
+              continue
             command = "<tr><td>" datetime "</td> <td>" wpsite "</td> <td>" perp "</td> <td><a href=\"https://archive.org/details/" u "\">" u "</a></td> <td>n/a</td> <td><a href=\"" uri "\">" wpname "</a></td></tr>"
             print command
             #if(wpsite == "enwiki") {
