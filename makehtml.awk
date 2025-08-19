@@ -37,6 +37,7 @@ BEGIN { # Bot cfg
   BotName = "iabotwatch"
   Home = G["home"]
   Engine = 3
+  Agent = "makehtml/iabotwatch acre User:GreenC enwiki"
 
   IGNORECASE = 1
 

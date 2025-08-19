@@ -23,6 +23,7 @@
 BEGIN {
 
   IGNORECASE = 1
+  Agent = "iabotwatch acre User:GreenC enwiki"
 
   G["toolforge"] = "/home/greenc/toolforge/"
   G["home"] = G["toolforge"] "iabotwatch/"
