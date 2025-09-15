@@ -179,15 +179,14 @@ function isItalic(lang,day,table,  url,fp,i,a,b,aa,ii,c,sw,sw2,sw3,so,su,ss) {
 
   }
 
+  return 0
+
   # Determine if IABot edited the wiki that day
   # TODO: this is an imperfect method since maybe it edited for web but not books needs edge case fine-tuning
-  url = "https://" lang ".wikipedia.org/w/index.php?title=Special%3AContributions&contribs=user&target=InternetArchiveBot&namespace=&tagfilter=&start=" doy2cal(P["curyear"], day, "%Y-%m-%d") "&end=" doy2cal(P["curyear"], day, "%Y-%m-%d")
-  fp = http2var(url)
-  if(empty(fp)) {
-    sleep(10, "unix")
-    fp = http2var(url)
-    if(empty(fp)) return 0
-  }
+  # WARNING: this can seriously slow it down - is it absolutely needed?
+
+  url = "https://" wutDomain(lang) ".org/w/index.php?title=Special%3AContributions&contribs=user&target=InternetArchiveBot&namespace=&tagfilter=&start=" doy2cal(P["curyear"], day, "%Y-%m-%d") "&end=" doy2cal(P["curyear"], day, "%Y-%m-%d")
+  fp = strip(http2var(url, 1))
   if(fp !~ /data-mw-revid/ && ! empty(fp))
     return 1
   return 0
@@ -1105,6 +1104,7 @@ function loadDataDaily( command,result,c,b,i,k,g,p,s,day,cwd,zv,zi,fp) {
         W3[g[k]][day]["italic"] = 0
 
       }
+
     }
   }
 
@@ -1163,7 +1163,6 @@ function loadDataDaily( command,result,c,b,i,k,g,p,s,day,cwd,zv,zi,fp) {
   # Total for web3 rows (left-right) ie. TW3R
   totalRows(W3, TW3R, "daily")
 
-
   # Total for web columns (up-down) ie. TWC
   totalColumns(W, TWC, "doys")
 
@@ -1187,8 +1186,6 @@ function loadDataDaily( command,result,c,b,i,k,g,p,s,day,cwd,zv,zi,fp) {
   removefile2(fp)
 
   # Save totals_01.txt data ie. the monthly rows (left-right) totals 
-  fp = P["ddir"] "totals_" P["curmonth"] ".txt"
-  removefile2(fp)
   genFile(TWR, "Web", fp)
   genFile(TDR, "Details", fp)
   genFile(TD2R, "Details Sim", fp)
@@ -1233,7 +1230,6 @@ function setup(  i,a,b,k,c,l) {
     return
   }
   P["ddir"] = P["db"] P["curyear"] "/"
-
 
   # Create P["doys"] (list of days in current month) from calendar.txt (generated in iabotwatch.awk)
   if(! checkexists(P["ddir"] "calendar.txt")) {
@@ -1293,6 +1289,7 @@ function setup(  i,a,b,k,c,l) {
   for(i = 1; i <= splitn(sys2var(Exe["ls"] " " P["db"] " | " Exe["grep"] " -E \"^20\""), a, i); i++) 
     P["years"] = P["years"] " " strip(a[i])
   P["years"] = strip(P["years"])
+
 
 }
 
