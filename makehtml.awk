@@ -1203,8 +1203,10 @@ function loadDataDaily( command,result,c,b,i,k,g,p,s,day,cwd,zv,zi,fp) {
 function setup(  i,a,b,k,c,l) {
 
   P["curyear"]  = strftime("%Y")
-  P["curmonth"] = strftime("%m")
-  P["curday"]   = strftime("%d")
+  # P["curmonth"] = strftime("%m")
+  P["curmonth"] = "08"
+  #P["curday"]   = strftime("%d")
+  P["curday"]   = "31"
   P["curdoy"]   = sys2var(Exe["date"] " -d \"" P["curyear"] "-" P["curmonth"] "-" P["curday"] "\" \"+%j\"")
 
   # Generate redirect pages
