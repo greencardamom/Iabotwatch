@@ -22,13 +22,23 @@
 
 BEGIN {
 
-  IGNORECASE = 1
-  Agent = "iabotwatch acre User:GreenC enwiki"
+  _defaults = "home      = /home/greenc/toolforge/iabotwatch/ \
+               awsexp    = /home/greenc/toolforge/awsexp/ \
+               emailfp   = /home/greenc/scripts/secrets/greenc.email \
+               userid    = User:GreenC \
+               version   = 1.5 \
+               copyright = 2026"
 
-  G["toolforge"] = "/home/greenc/toolforge/"
-  G["home"] = G["toolforge"] "iabotwatch/"
+  asplit(G, _defaults, "[ ]*[=][ ]*", "[ ]{9,}")
+  BotName = "iabotwatch"
+  Home = G["home"]
+
+  # Agent string format non-compliance could result in 429 (too many requests) rejections by WMF API
+  Agent = BotName "-" G["version"] "-" G["copyright"] " (" G["userid"] "; mailto:" strip(readfile(G["emailfp"])) ")"
+
+  IGNORECASE = 1
+
   G["dbdir"] = G["home"] "www/db/"
-  G["awsexp"] = G["toolforge"] "awsexp/"
 
   while ((getline line < "/dev/stdin") > 0) {
 
