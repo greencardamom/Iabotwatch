@@ -14,26 +14,17 @@
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
 
 source "/home/greenc/toolforge/iabotwatch/set.csh"
 setenv AWKPATH .:/home/greenc/BotWikiAwk/lib:/usr/local/share/awk
 
 set output = "/home/greenc/toolforge/iabotwatch/wwwlogroll/iabotwatch.html"
 set push = "/home/greenc/toolforge/scripts/push"
-set chunkfragment = "$IABOTWATCH"chunkfragment.html
-set chunkall = "$IABOTWATCH"chunkall.html
-set chunktemp = "$IABOTWATCH"chunktemp.html
+
+set chunkall = "/chico/iabotwatch_live/chunkall.html"
+set chunkfragment = "/chico/iabotwatch_live/chunkfragment.html"
+set chunktemp = "/chico/iabotwatch_live/chunktemp.html"
+mkdir -p "/chico/iabotwatch_live/"
 
 while(1 == 1)
 
@@ -44,13 +35,12 @@ while(1 == 1)
    if(! -e "$chunkall") $TOUCH "$chunkall"
    if(-e "$chunkfragment") $RM "$chunkfragment"
 
-   # $CURL -s https://stream.wikimedia.org/v2/stream/page-links-change | $GREP "InternetArchiveBot" | $GREP -iE "([/]|[.])archive[.]org" | $SED "s/data: //g" | $AWK -b -ilibrary -ijson -f "$IABOTWATCH""iabotwatch.awk" >> "$chunkfragment"
    $CURL -s https://stream.wikimedia.org/v2/stream/page-links-change | $GREP -E "(([/]|[.])archive[.]org[/]|[&]Expires=)" | $SED "s/data: //g" | $AWK -b -ilibrary -ijson -f "$IABOTWATCH""iabotwatch.awk" >> "$chunkfragment"
 
    # Shuffle files, sort and save most recent 1000
 
    if(-e "$chunkfragment") $CAT "$chunkfragment" "$chunkall" | $SORT -rn | $HEAD -n 1000 > "$chunktemp"
-   if(-e "$chunktemp")     $MV "$chunktemp" "$chunkall"
+   if(-e "$chunktemp")      $MV "$chunktemp" "$chunkall"
    $CAT "$IABOTWATCH""headerlogroll.html" "$chunkall" "$IABOTWATCH""footer.html" > $output
 
    # Push $ouput to ~/www/static/iabotwatch on Toolforge
@@ -64,5 +54,3 @@ while(1 == 1)
    endif
 
 end
-
-
