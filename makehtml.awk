@@ -82,7 +82,7 @@ function coma(s) {
 function doy2cal(year,doy,form) {
         # NOTE: to convert from a year (2020) and day of year (347) to a calander date:
         #  date -d "347 days -1 day 2020-01-01" +"%Y%m%d"
-  return sys2var(Exe["date"] " -d \"" doy " days -1 day " year "-01-01\" +\"" form "\"")
+  return strip(sys2var(Exe["date"] " -d \"" doy " days -1 day " year "-01-01\" +\"" form "\""))
 }
 
 #
@@ -1055,7 +1055,7 @@ function genItalicArray(A, C) {
 #
 # Load data from /db directory into W[] and D[]
 #
-function loadDataDaily( command,result,c,b,i,k,g,p,s,day,cwd,zv,zi,fp) {
+function loadDataDaily( command,result,c,b,i,k,g,p,s,day,cwd,zv,zi,fp,file,_a,_T,_s) {
 
   cwd = sys2var("pwd")
   if(! chDir(P["ddir"]))
@@ -1070,26 +1070,42 @@ function loadDataDaily( command,result,c,b,i,k,g,p,s,day,cwd,zv,zi,fp) {
   for(i = 1; i <= c; i++) {
     day = strip(b[i])
     if(! empty(day)) {
-      for(k in g) {
-        command = Exe["awk"] " 'BEGINFILE{w = 0; d = 0; d2 = 0; u = 0; w2 = 0; w3 = 0; if (ERRNO) nextfile } {split($0, a, \" \"); if(a[1] == \"" g[k] "\") {w=w+int(a[3]);d=d+int(a[4]);u=u+int(a[5]);w2=w2+int(a[6]);w3=w3+int(a[7]);d2=d2+int(a[8])} }END{print w \" \" d \" \" u \" \" w2 \" \" w3 \" \" d2}' " day ".txt"
-        result = sys2var(command)
 
-        W[g[k]][day]["value"] = int(splitx(result, " ", 1))          # IABot web
+      delete _T
+      file = day ".txt"
+      if(checkexists(file)) {
+        while ((getline < file) > 0) {
+          if (split($0, _a, " ") < 8) continue
+          _s = _a[1]
+          _T[_s][1] += int(_a[3]) # IABot web
+          _T[_s][2] += int(_a[4]) # IABot details
+          _T[_s][3] += int(_a[5]) # User details
+          _T[_s][4] += int(_a[6]) # User web
+          _T[_s][5] += int(_a[7]) # User web bot
+          _T[_s][6] += int(_a[8]) # IABot details sim
+        }
+        close(file)
+      }
+
+      for(k in g) {
+        
+        # Original logic restored exactly:
+        W[g[k]][day]["value"] = int(_T[g[k]][1])          # IABot web
         if(int(W[g[k]][day]["value"]) > 0) 
           W[g[k]][day]["italic"] = int(isItalic(g[k], day, "web")) 
         else 
           W[g[k]][day]["italic"] = 0
 
-        D[g[k]][day]["value"] = int(splitx(result, " ", 2))          # IABot details
+        D[g[k]][day]["value"] = int(_T[g[k]][2])          # IABot details
         if(int(D[g[k]][day]["value"]) > 0) 
           D[g[k]][day]["italic"] = int(isItalic(g[k], day, "other")) 
         else 
           D[g[k]][day]["italic"] = 0
 
-        D2[g[k]][day]["value"] = int(splitx(result, " ", 6))         # IABot details sim
+        D2[g[k]][day]["value"] = int(_T[g[k]][6])         # IABot details sim
         D2[g[k]][day]["italic"] = 0
 
-        U[g[k]][day]["value"] = int(splitx(result, " ", 3))          # User details
+        U[g[k]][day]["value"] = int(_T[g[k]][3])          # User details
         U[g[k]][day]["italic"] = 0
         # TODO: Italic disabled for user contribs doesn't seem to work
         #if(int(U[g[k]][day]["value"]) > 0) 
@@ -1097,10 +1113,10 @@ function loadDataDaily( command,result,c,b,i,k,g,p,s,day,cwd,zv,zi,fp) {
         #else 
         #  U[g[k]][day]["italic"] = 0
 
-        W2[g[k]][day]["value"] = int(splitx(result, " ", 4))         # User web
+        W2[g[k]][day]["value"] = int(_T[g[k]][4])         # User web
         W2[g[k]][day]["italic"] = 0
 
-        W3[g[k]][day]["value"] = int(splitx(result, " ", 5))         # User web bot
+        W3[g[k]][day]["value"] = int(_T[g[k]][5])         # User web bot
         W3[g[k]][day]["italic"] = 0
 
       }
