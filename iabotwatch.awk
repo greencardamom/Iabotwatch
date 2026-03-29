@@ -42,7 +42,14 @@ BEGIN {
 
   while ((getline line < "/dev/stdin") > 0) {
 
+    # 1. Catch the Event ID for reconnections
+    if (line ~ /^id: /) {
+      last_event_id = substr(line, 5)
+      continue
+    }
+
     json = strip(line)
+
     delete URLZ1  # for archive URL added by IABot
     delete URLZ2  # for archive URL added by users
     delete URLZ3  # for archive URL added by other bots
@@ -51,14 +58,13 @@ BEGIN {
     delete URLB2  # for books added by other
     delete URLB3  # for sim_ books added by IABot
 
-    logfile = getlogfile()
-
     # print json >> "rev4.json"
 
     if( query_json(json, jsona) >= 0) {
       # awkenough_dump(jsona, "jsona")
       if(int(jsona["added_links","0"]) > 0) {
         nadded = int(jsona["added_links","0"])
+        logfile = getlogfile()
         uri = jsona["meta", "uri"]
         wpdomain = jsona["meta", "domain"]
         wpsite  = jsona["database"]                       # "enwiki", "frwiki", "enwiktionary", etc..
@@ -89,7 +95,16 @@ BEGIN {
 
         # Convert jsona["meta","dt"] to US/Pacific time
         #   https://unix.stackexchange.com/questions/48101/how-can-i-have-date-output-the-time-from-a-different-timezone
-        datetime = sys2var("TZ=\":US/Pacific\" /bin/date -d \"" jsona["meta","dt"] "\" \"+%Y-%m-%dT%H:%M:%S\"")
+        #datetime = sys2var("TZ=\":US/Pacific\" /bin/date -d \"" jsona["meta","dt"] "\" \"+%Y-%m-%dT%H:%M:%S\"")
+
+        # Convert UTC dt to US/Pacific natively in AWK
+        safe_dt = jsona["meta","dt"]
+        gsub(/[-T:Z]/, " ", safe_dt)
+        unix_dt = mktime(safe_dt, 1) # Parse as UTC
+        old_tz = ENVIRON["TZ"]
+        ENVIRON["TZ"] = "US/Pacific"
+        datetime = strftime("%Y-%m-%dT%H:%M:%S", unix_dt)
+        if (old_tz != "") ENVIRON["TZ"] = old_tz; else delete ENVIRON["TZ"]
 
         # By default, either user or userbot
         if(int(wpisbot) == 1)
@@ -142,7 +157,7 @@ BEGIN {
             # Expires= URL (see awsexp.awk)
             if(url ~ /[&]Expires=/) {
               if(wpsite == "enwiki") {
-                print wpname " ---- " url " ---- " sys2var("/usr/bin/date \"+%Y%m%dT%H:%M:%S\"") >> G["awsexp"] "dropoff.txt"
+                print wpname " ---- " url " ---- " strftime("%Y%m%dT%H:%M:%S", systime()) >> G["awsexp"] "dropoff.txt"
                 close(G["awsexp"] "dropoff.txt")
               }
             }
@@ -153,53 +168,42 @@ BEGIN {
         # Get edit comment and edit tags from API:Revisions
         commandurl = "https://" wpdomain "/w/api.php?action=query&prop=revisions&revids=" revid "&rvprop=comment|tags|timestamp&format=json"
         jsonrev = http2var(commandurl)
-        if( query_json(jsonrev, jsonreva) >= 0) { 
 
-          comment   = jsonreva["query","pages",pageid,"revisions","1","comment"]
-          timestamp = jsonreva["query","pages",pageid,"revisions","1","timestamp"]
+        comment = ""
+        timestamp = ""
+        revert = 0
 
-          # Workaround for Streams bug https://phabricator.wikimedia.org/T303907
-          # If reported diff is greater than 2 days from now ignore it.
-          epochnow = sys2var("/usr/bin/date -u +\"%s\"")
-          epochdiff = sys2var("/usr/bin/date -u -d \"" timestamp "\" +\"%s\"")
-          epochlength = int(epochnow) - int(epochdiff)
-          if(int(epochlength) < 1) continue
-          epochdays = int((((int(epochlength) / 60) / 60) / 24)) # number of days between now and when diff was made
-          if(int(epochdays) > 2) {
-            #print wpsite " ---- " sys2var(Exe["date"] " +\"%Y%m%d\"") " ---- https://" gsubi("wiki", "", wpsite) ".wikipedia.org/w/index.php?diff=" revid " ---- " timestamp " ---- " epochdays >> "epochdiff.txt"
-            #close("epochdiff.txt")
-            continue
-          }
+        # Bypass query_json to prevent CPU spikes during stream bursts
+        if (match(jsonrev, /"comment":"([^"]*)"/, m)) comment = m[1]
+        if (match(jsonrev, /"timestamp":"([^"]*)"/, m)) timestamp = m[1]
 
-          # determine if a revert by looking at tags
-          # List of tags: https://en.wikipedia.org/wiki/Special:Tags .. each language has its own tags but they seem to be the same
+        # Workaround for Streams bug https://phabricator.wikimedia.org/T303907
+        safe_ts = timestamp
+        gsub(/[-T:Z]/, " ", safe_ts)
+        epochnow = systime()
+        epochdiff = mktime(safe_ts, 1) # '1' ensures UTC parsing
+        epochlength = epochnow - epochdiff
 
-          #if(jsonrev ~ /(Undo|revert|rollback|vandal)/) {
-          #  print "1: " jsonrev >> logfile ".details.revert.debug.txt"
-          #  close(logfile ".details.revert.debug.txt")
-          #}
+        if(int(epochlength) < 1) continue
+        epochdays = int((((int(epochlength) / 60) / 60) / 24)) 
+        if(int(epochdays) > 2) continue
 
-          numbtags = int(jsonreva["query","pages",pageid,"revisions","1","tags","0"])
-          if( numbtags > 0) {
-            for(ni = 1; ni <= numbtags; ni++) {
-              if( jsonreva["query","pages",pageid,"revisions","1","tags",ni] ~ /(Undo|revert|rollback|vandal)/) {
-                #print "2: " jsonrev >> logfile ".details.revert.debug.txt"
-                #close(logfile ".details.revert.debug.txt")
+        # Determine if a revert by extracting the 'tags' array to prevent false positives
+        if (match(jsonrev, /"tags":\[([^\]]*)\]/, m)) {
+            if (m[1] ~ /(Undo|revert|rollback|vandal)/) {
                 revert = 1
-              }
-              
             }
-          }
         }
 
-        # Look at IABot edit comments to determine who is responsible for the edit.
         if( length(URLZ1) > 0 || length(URLB1) > 0 || length(URLB3) > 0) {
-          perp = "API:Revisions error"
           if(!empty(comment)) {
-            if(comment ~ /GreenC bot/) 
-              perp = "greencbot"
-            else if(comment ~ /#IABot/) 
-              perp = "iabot"
+            if(comment ~ /GreenC bot/) perp = "greencbot"
+            else if(comment ~ /#IABot/) perp = "iabot"
+          } else {
+            # FALLBACK: If the API failed, guess the perp based on the username from EventStreams
+            if(wpuser ~ /InternetArchiveBot/) perp = "iabot"
+            else if(wpuser ~ /GreenC bot/) perp = "greencbot"
+            else perp = "userbot" # Safe default
           }
         }
 
@@ -323,16 +327,15 @@ BEGIN {
 
 }
 
-function getlogfile(  curtime, year, doy) {
+function getlogfile(  safe_dt, unix_dt, year, doy) {
 
-        # To be even more precise, format date string to "YYYY MM DD HH MM SS" and then
-        #   year = strftime("%Y", mktime(<string>))
-        #   doy = strftime("%j", mktime(<string>))
-        # But below method is just as fast and low odds of error
+        # Process the date natively without a system call
+        safe_dt = jsona["meta","dt"]
+        gsub(/[-T:Z]/, " ", safe_dt)
+        unix_dt = mktime(safe_dt, 1)
 
-        curtime = sys2var("/usr/bin/date -d \"" jsona["meta","dt"] "\" \"+%Y-%m-%d\"")
-        year = splitx(curtime, "-", 1)
-        doy = strftime("%j")
+        year = strftime("%Y", unix_dt, 1)
+        doy = strftime("%j", unix_dt, 1)
 
         if(!checkexists(G["dbdir"] year)) {
           sys2var("/bin/mkdir " G["dbdir"] year)
@@ -340,10 +343,6 @@ function getlogfile(  curtime, year, doy) {
         }
 
         return G["dbdir"] year "/" doy 
-
-        # NOTE: to convert from a year (2020) and day of year (347) to a calander date:
-        #  date -d "347 days -1 day 2020-01-01" +"%Y%m%d"
-
 }
 
 #
@@ -369,3 +368,14 @@ function makeCalendar(DBDir, year,  i,d,month,day,doy,checkMonth,out) {
 
 }
 
+END {
+  # Only save the resume point if it is not empty AND it is a properly closed JSON array
+  if (last_event_id != "" && last_event_id ~ /\]$/) {
+    header_file = G["home"] "last_event_id.txt"
+    print "Last-Event-ID: " last_event_id > header_file
+    close(header_file)
+  } else if (last_event_id != "") {
+    # If the ID is truncated, log it and intentionally skip overwriting the file
+    print "[!] Stream disconnected cleanly, but last_event_id was truncated. Discarding to prevent 400 Bad Request." > "/dev/stderr"
+  }
+}

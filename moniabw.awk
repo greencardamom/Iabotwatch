@@ -14,6 +14,7 @@ BEGIN {
     }
   }
 
-  system("(/home/greenc/toolforge/iabotwatch/iabotwatch.csh)&")
-
+  # Completely detach the wrapper from cron so it survives indefinitely
+  system("nohup /home/greenc/toolforge/iabotwatch/iabotwatch.csh > /dev/null 2>&1 &")
+  
 }

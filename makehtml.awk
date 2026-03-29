@@ -52,6 +52,15 @@ BEGIN { # Bot cfg
 
 BEGIN { # Bot run
 
+  Optind = Opterr = 1 
+  while ((C = getopt(ARGC, ARGV, "y:m:")) != -1) { 
+      opts++
+      if(C == "y")  # Optional time travel to re-process older months eg. -y 2025 -m 01
+        force_year = Optarg
+      if(C == "m")  # zero-padded 2 digit number
+        force_month = Optarg
+  }
+
   setup()
 
   loadDataDaily()
@@ -1218,10 +1227,18 @@ function loadDataDaily( command,result,c,b,i,k,g,p,s,day,cwd,zv,zi,fp,file,_a,_T
 #
 function setup(  i,a,b,k,c,l) {
 
-  P["curyear"]  = strftime("%Y")
-  P["curmonth"] = strftime("%m")
-  P["curday"]   = strftime("%d")
-  P["curdoy"]   = sys2var(Exe["date"] " -d \"" P["curyear"] "-" P["curmonth"] "-" P["curday"] "\" \"+%j\"")
+  # Time Machine Override
+  if (force_year != "" && force_month != "") {
+    P["curyear"]  = force_year
+    P["curmonth"] = force_month
+    # Trick the script into thinking "today" is the last day of the target month
+    P["curday"]   = strip(sys2var(Exe["date"] " -d \"" P["curyear"] "-" P["curmonth"] "-01 +1 month -1 day\" +%d"))
+  } else {
+    P["curyear"]  = strftime("%Y")
+    P["curmonth"] = strftime("%m")
+    P["curday"]   = strftime("%d")
+  }
+  P["curdoy"]   = strip(sys2var(Exe["date"] " -d \"" P["curyear"] "-" P["curmonth"] "-" P["curday"] "\" \"+%j\""))
 
   # Generate redirect pages
   print MetaRedirect("https://tools-static.wmflabs.org/botwikiawk/dashdaily/" P["curyear"] "/" P["curmonth"] ".html") > P["root"] "dashdaily.html"
@@ -1274,7 +1291,7 @@ function setup(  i,a,b,k,c,l) {
   # Generate last day of current month in doy form eg. last day of April is 120
 
   # Test: awk -ilibrary -v month="07" 'BEGIN{l = sys2var(Exe["date"] " -d \"$(/bin/date +%Y-%m-01) + 1 month - 1 day\" +%d"); print strftime("%j", mktime("2021 " month " " l " 01 01 01") )  }'
-  l = sys2var(Exe["date"] " -d \"$(/bin/date +%Y-%m-01) +1 month -1 day\" +%d")
+  l = strip(sys2var(Exe["date"] " -d \"" P["curyear"] "-" P["curmonth"] "-01 +1 month -1 day\" +%d"))
   P["lastday"] = strftime("%j", mktime(P["curyear"] " " P["curmonth"] " " l " 01 01 01") )
 
   P["months"] = "01 02 03 04 05 06 07 08 09 10 11 12"

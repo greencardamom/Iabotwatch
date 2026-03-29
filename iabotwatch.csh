@@ -18,33 +18,37 @@
 source "/home/greenc/toolforge/iabotwatch/set.csh"
 setenv AWKPATH .:/home/greenc/BotWikiAwk/lib:/usr/local/share/awk
 
-set output = "/home/greenc/toolforge/iabotwatch/wwwlogroll/iabotwatch.html"
-set push = "/home/greenc/toolforge/scripts/push"
+set chunkall = "$CHUNKHOME""chunkall.html"
+set chunkfragment = "$CHUNKHOME""chunkfragment.html"
+set chunktemp = "$CHUNKHOME""chunktemp.html"
 
-set chunkall = "/chico/iabotwatch_live/chunkall.html"
-set chunkfragment = "/chico/iabotwatch_live/chunkfragment.html"
-set chunktemp = "/chico/iabotwatch_live/chunktemp.html"
-mkdir -p "/chico/iabotwatch_live/"
+mkdir -p "$CHUNKHOME"
 
 while(1 == 1)
 
    set day1 = `$DATE +"%j"`
 
-   # EventStream exits every 15 minutes 
-
    if(! -e "$chunkall") $TOUCH "$chunkall"
    if(-e "$chunkfragment") $RM "$chunkfragment"
 
-   $CURL -s https://stream.wikimedia.org/v2/stream/page-links-change | $GREP -E "(([/]|[.])archive[.]org[/]|[&]Expires=)" | $SED "s/data: //g" | $AWK -b -ilibrary -ijson -f "$IABOTWATCH""iabotwatch.awk" >> "$chunkfragment"
+   $ECHO "`$DATE '+%Y-%m-%d %H:%M:%S'` [iabotwatch] - Stream CONNECTING..." >> "$monitor_log"
+
+   # 1. Safely check for substance (-s), bypass JSON quotes using @
+   if (-s "$last_id_file") then
+      $CURL -H @"$last_id_file" -s --speed-limit 1 --speed-time 60 https://stream.wikimedia.org/v2/stream/page-links-change | $GREP --line-buffered -E "^id: |(([/]|[.])archive[.]org[/]|[&]Expires=)" | $SED -u "s/data: //g" | $AWK -b -ilibrary -ijson -f "$IABOTWATCH""iabotwatch.awk" >> "$chunkfragment"
+   else
+      $CURL -s --speed-limit 1 --speed-time 60 https://stream.wikimedia.org/v2/stream/page-links-change | $GREP --line-buffered -E "^id: |(([/]|[.])archive[.]org[/]|[&]Expires=)" | $SED -u "s/data: //g" | $AWK -b -ilibrary -ijson -f "$IABOTWATCH""iabotwatch.awk" >> "$chunkfragment"
+   endif
+
+   $ECHO "`$DATE '+%Y-%m-%d %H:%M:%S'` [iabotwatch] - Stream DISCONNECTED..." >> "$monitor_log"
 
    # Shuffle files, sort and save most recent 1000
-
    if(-e "$chunkfragment") $CAT "$chunkfragment" "$chunkall" | $SORT -rn | $HEAD -n 1000 > "$chunktemp"
    if(-e "$chunktemp")      $MV "$chunktemp" "$chunkall"
    $CAT "$IABOTWATCH""headerlogroll.html" "$chunkall" "$IABOTWATCH""footer.html" > $output
 
    # Push $ouput to ~/www/static/iabotwatch on Toolforge
-   $push iabotwatchlogroll
+   # $push iabotwatchlogroll
 
    set day2 = `$DATE +"%j"`
    if($day1 != $day2) then
@@ -52,5 +56,7 @@ while(1 == 1)
        $MV "$IABOTWATCH"isitdead.running.txt "$IABOTWATCH"isitdead.ready.txt
      endif
    endif
+
+   sleep 2
 
 end
