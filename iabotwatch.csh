@@ -18,9 +18,9 @@
 source "/home/greenc/toolforge/iabotwatch/set.csh"
 setenv AWKPATH .:/home/greenc/BotWikiAwk/lib:/usr/local/share/awk
 
-set chunkall = "$CHUNKHOME""chunkall.html"
-set chunkfragment = "$CHUNKHOME""chunkfragment.html"
-set chunktemp = "$CHUNKHOME""chunktemp.html"
+# Set to 1 to enable logging 
+set enable_logging = 0
+set monitor_log = "$IABOTWATCH""stream_monitor.log"
 
 mkdir -p "$CHUNKHOME"
 
@@ -31,16 +31,16 @@ while(1 == 1)
    if(! -e "$chunkall") $TOUCH "$chunkall"
    if(-e "$chunkfragment") $RM "$chunkfragment"
 
-   $ECHO "`$DATE '+%Y-%m-%d %H:%M:%S'` [iabotwatch] - Stream CONNECTING..." >> "$monitor_log"
+   if ($enable_logging == 1) $ECHO "`$DATE '+%Y-%m-%d %H:%M:%S'` [iabotwatch] - Stream CONNECTING..." >> "$monitor_log"
 
    # 1. Safely check for substance (-s), bypass JSON quotes using @
    if (-s "$last_id_file") then
-      $CURL -H @"$last_id_file" -s --speed-limit 1 --speed-time 60 https://stream.wikimedia.org/v2/stream/page-links-change | $GREP --line-buffered -E "^id: |(([/]|[.])archive[.]org[/]|[&]Expires=)" | $SED -u "s/data: //g" | $AWK -b -ilibrary -ijson -f "$IABOTWATCH""iabotwatch.awk" >> "$chunkfragment"
+      $CURL -H @"$last_id_file" -s --speed-limit 1 --speed-time 120 https://stream.wikimedia.org/v2/stream/page-links-change | $GREP --line-buffered -E "^id: |(([/]|[.])archive[.]org[/]|[&]Expires=)" | $SED -u "s/data: //g" | $AWK -b -ilibrary -ijson -f "$IABOTWATCH""iabotwatch.awk" >> "$chunkfragment"
    else
-      $CURL -s --speed-limit 1 --speed-time 60 https://stream.wikimedia.org/v2/stream/page-links-change | $GREP --line-buffered -E "^id: |(([/]|[.])archive[.]org[/]|[&]Expires=)" | $SED -u "s/data: //g" | $AWK -b -ilibrary -ijson -f "$IABOTWATCH""iabotwatch.awk" >> "$chunkfragment"
+      $CURL -s --speed-limit 1 --speed-time 120 https://stream.wikimedia.org/v2/stream/page-links-change | $GREP --line-buffered -E "^id: |(([/]|[.])archive[.]org[/]|[&]Expires=)" | $SED -u "s/data: //g" | $AWK -b -ilibrary -ijson -f "$IABOTWATCH""iabotwatch.awk" >> "$chunkfragment"
    endif
 
-   $ECHO "`$DATE '+%Y-%m-%d %H:%M:%S'` [iabotwatch] - Stream DISCONNECTED..." >> "$monitor_log"
+   if ($enable_logging == 1) $ECHO "`$DATE '+%Y-%m-%d %H:%M:%S'` [iabotwatch] - Stream DISCONNECTED..." >> "$monitor_log"
 
    # Shuffle files, sort and save most recent 1000
    if(-e "$chunkfragment") $CAT "$chunkfragment" "$chunkall" | $SORT -rn | $HEAD -n 1000 > "$chunktemp"

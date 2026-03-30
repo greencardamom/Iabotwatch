@@ -167,7 +167,7 @@ BEGIN {
 
         # Get edit comment and edit tags from API:Revisions
         commandurl = "https://" wpdomain "/w/api.php?action=query&prop=revisions&revids=" revid "&rvprop=comment|tags|timestamp&format=json"
-        jsonrev = http2var(commandurl)
+        jsonrev = wmf_api_fetch(commandurl)
 
         comment = ""
         timestamp = ""
@@ -366,6 +366,83 @@ function makeCalendar(DBDir, year,  i,d,month,day,doy,checkMonth,out) {
   }
   close(out)
 
+}
+
+function wmf_api_fetch(url, tries,  debug, i, op, maxlag_val, pause_time, current_url, command) {
+
+     debug = 0
+
+     if (!checkexe(Exe["wget"], "wget") || !checkexe(Exe["timeout"], "timeout"))
+       return
+
+     # Default to 3 tries
+     if(empty(tries))
+       tries = 3
+
+     if (url ~ /'/)
+         gsub(/'/, "%27", url)
+     if (url ~ /’/)
+         gsub(/’/, "%E2%80%99", url)
+
+     # Clean the URL of any pre-existing maxlag parameters to prevent stacking
+     gsub(/&maxlag=[0-9]+|\?maxlag=[0-9]+/, "", url)
+
+     for (i = 1; i <= int(tries); i++) {
+         
+         # Apply the backoff algorithm
+         if (i == 1) { 
+             maxlag_val = 10
+             pause_time = 10 
+         } else if (i == 2) { 
+             maxlag_val = 15
+             pause_time = 15 
+         } else { 
+             maxlag_val = 20
+             pause_time = 20 
+         }
+
+         # Safely append the maxlag parameter to the current URL
+         if (url ~ /\?/)
+             current_url = url "&maxlag=" maxlag_val
+         else
+             current_url = url "?maxlag=" maxlag_val
+
+         # Build a purpose-built options string from scratch, injecting the global Agent
+         local_opts = " --user-agent=\"" Agent "\" --referer=\"https://en.wikipedia.org/wiki/Main_Page\" --no-cookies --ignore-length --no-check-certificate --tries=1 --timeout=15 --waitretry=0"
+
+         # Build the final, completely unambiguous command
+         command = Exe["timeout"] " 30s " Exe["wget"] local_opts " -q -O- " shquote(current_url)
+
+         if(debug) stdErr(command)
+
+         op = sys2var(command)
+
+         if (!empty(op)) {
+             # If the WMF API returns a maxlag error, treat it as a failure
+             if (op ~ /"code"[ ]*:[ ]*"maxlag"/) {
+                 if(debug) stdErr("wmf_api_fetch: [WARNING] API maxlag exceeded (Attempt " i ").")
+             } else {
+                 # Success, or a different fatal API error. Return the payload.
+                 return op
+             }
+         } else {
+             if(debug) stdErr("wmf_api_fetch: [WARNING] Network Timeout or HTTP Error (Attempt " i ").")
+         }
+           
+         # Only sleep if we have retries remaining (identical to attempt < max_retries)
+         if (i < int(tries)) {
+             if (debug) 
+                 stdErr("wmf_api_fetch: Retrying in " pause_time "s...")
+ 
+             if (!empty(Exe["sleep"])) 
+                 sleep(pause_time, "unix")
+             else 
+                 sleep(pause_time)
+         }
+     }
+     
+     # Return empty if all retries are exhausted
+     return ""
 }
 
 END {

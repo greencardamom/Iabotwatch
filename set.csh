@@ -3,11 +3,14 @@
 set IABOTWATCH = "/home/greenc/toolforge/iabotwatch/"
 set CHUNKHOME = "/chico/iabotwatch_live/"
 
-set output = "/home/greenc/toolforge/iabotwatch/wwwlogroll/iabotwatch.html"
-set push = "/home/greenc/toolforge/scripts/push"
+set chunkall = "$CHUNKHOME""chunkall.html"
+set chunkfragment = "$CHUNKHOME""chunkfragment.html"
+set chunktemp = "$CHUNKHOME""chunktemp.html"
 
 set last_id_file = "$IABOTWATCH""last_event_id.txt"
-set monitor_log = "$IABOTWATCH""stream_monitor.log"
+
+set output = "/home/greenc/toolforge/iabotwatch/wwwlogroll/iabotwatch.html"
+set push = "/home/greenc/toolforge/scripts/push"
 
 set AWK = "/usr/local/bin/awk"
 set SED = "/bin/sed"
