@@ -72,6 +72,7 @@ BEGIN {
         revid   = jsona["rev_id"]
         pagens  = jsona["page_namespace"]
         wpname  = gsubi("_", " ", jsona["page_title"])
+        gsub(/[\r\n\t]/, "", wpname)
         wpuser  = jsona["performer","user_text"]
         wpisbot = jsona["performer","user_is_bot"]
 
@@ -115,6 +116,9 @@ BEGIN {
         for(j = 1; j <= nadded; j++) {
           if(jsona["added_links",j,"external"] == 1) {
             url = urldecodeawk(urldecodeawk(jsona["added_links",j,"link"]))
+            
+            # Sanitize URL: remove newlines, carriage returns, and tabs
+            gsub(/[\r\n\t]/, "", url)
 
             # archives
             if(url ~ "https://web.archive.org/web/") {
@@ -166,7 +170,7 @@ BEGIN {
         }
 
         # Get edit comment and edit tags from API:Revisions
-        commandurl = "https://" wpdomain "/w/api.php?action=query&prop=revisions&revids=" revid "&rvprop=comment|tags|timestamp&format=json"
+        commandurl = "https://" wpdomain "/w/api.php?action=query&prop=revisions&revids=" revid "&rvprop=comment%7Ctags%7Ctimestamp&format=json"
         jsonrev = wmf_api_fetch(commandurl)
 
         comment = ""
@@ -177,16 +181,21 @@ BEGIN {
         if (match(jsonrev, /"comment":"([^"]*)"/, m)) comment = m[1]
         if (match(jsonrev, /"timestamp":"([^"]*)"/, m)) timestamp = m[1]
 
-        # Workaround for Streams bug https://phabricator.wikimedia.org/T303907
-        safe_ts = timestamp
-        gsub(/[-T:Z]/, " ", safe_ts)
-        epochnow = systime()
-        epochdiff = mktime(safe_ts, 1) # '1' ensures UTC parsing
-        epochlength = epochnow - epochdiff
 
-        if(int(epochlength) < 1) continue
-        epochdays = int((((int(epochlength) / 60) / 60) / 24)) 
-        if(int(epochdays) > 2) continue
+        # Workaround for Streams bug https://phabricator.wikimedia.org/T303907
+        if (timestamp != "") {
+            safe_ts = timestamp
+            gsub(/[-T:Z]/, " ", safe_ts)
+            epochnow = systime()
+            epochdiff = mktime(safe_ts, 1) # '1' ensures UTC parsing
+            epochlength = epochnow - epochdiff
+            
+            # Allow a 60-second negative buffer for server clock drift
+            if(int(epochlength) < -60) continue
+            
+            epochdays = int((((int(epochlength) / 60) / 60) / 24)) 
+            if(int(epochdays) > 2) continue
+        }
 
         # Determine if a revert by extracting the 'tags' array to prevent false positives
         if (match(jsonrev, /"tags":\[([^\]]*)\]/, m)) {
@@ -368,7 +377,14 @@ function makeCalendar(DBDir, year,  i,d,month,day,doy,checkMonth,out) {
 
 }
 
-function wmf_api_fetch(url, tries,  debug, i, op, maxlag_val, pause_time, current_url, command) {
+function wmf_api_fetch(url,  command, op) {
+     # wikiget handles OAuth, maxlag, and retries natively
+     command = "wikiget -U " shquote(url)
+     op = sys2var(command)
+     return op
+}
+
+function wmf_api_fetch_OLD(url, tries,  debug, i, op, maxlag_val, pause_time, current_url, command) {
 
      debug = 0
 

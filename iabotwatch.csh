@@ -43,7 +43,7 @@ while(1 == 1)
    if ($enable_logging == 1) $ECHO "`$DATE '+%Y-%m-%d %H:%M:%S'` [iabotwatch] - Stream DISCONNECTED..." >> "$monitor_log"
 
    # Shuffle files, sort and save most recent 1000
-   if(-e "$chunkfragment") $CAT "$chunkfragment" "$chunkall" | $SORT -rn | $HEAD -n 1000 > "$chunktemp"
+   if(-e "$chunkfragment") $CAT "$chunkfragment" "$chunkall" | $SORT -n | $HEAD -n 1000 > "$chunktemp"
    if(-e "$chunktemp")      $MV "$chunktemp" "$chunkall"
    $CAT "$IABOTWATCH""headerlogroll.html" "$chunkall" "$IABOTWATCH""footer.html" > $output
 
@@ -57,6 +57,7 @@ while(1 == 1)
      endif
    endif
 
-   sleep 2
+   #sleep 2
+   sleep 300
 
 end
