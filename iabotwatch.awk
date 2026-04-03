@@ -42,12 +42,6 @@ BEGIN {
 
   while ((getline line < "/dev/stdin") > 0) {
 
-    # 1. Catch the Event ID for reconnections
-    if (line ~ /^id: /) {
-      last_event_id = substr(line, 5)
-      continue
-    }
-
     json = strip(line)
 
     delete URLZ1  # for archive URL added by IABot
@@ -461,14 +455,3 @@ function wmf_api_fetch_OLD(url, tries,  debug, i, op, maxlag_val, pause_time, cu
      return ""
 }
 
-END {
-  # Only save the resume point if it is not empty AND it is a properly closed JSON array
-  if (last_event_id != "" && last_event_id ~ /\]$/) {
-    header_file = G["home"] "last_event_id.txt"
-    print "Last-Event-ID: " last_event_id > header_file
-    close(header_file)
-  } else if (last_event_id != "") {
-    # If the ID is truncated, log it and intentionally skip overwriting the file
-    print "[!] Stream disconnected cleanly, but last_event_id was truncated. Discarding to prevent 400 Bad Request." > "/dev/stderr"
-  }
-}
