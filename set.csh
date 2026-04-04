@@ -3,6 +3,8 @@
 set IABOTWATCH = "/home/greenc/toolforge/iabotwatch/"
 set CHUNKHOME = "/chico/iabotwatch_live/"
 
+set monitor_log = "$IABOTWATCH""stream_monitor.log"
+
 set chunkall = "$CHUNKHOME""chunkall.html"
 set chunkfragment = "$CHUNKHOME""chunkfragment.html"
 set chunktemp = "$CHUNKHOME""chunktemp.html"
