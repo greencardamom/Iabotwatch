@@ -26,7 +26,7 @@ It watches WMF EventsStream API for events of interest and charts them.
   1. iabw-stream.csh + extract.awk ───────► Writes to: cache/cache.live
           │
           ▼  (~15 Min Cycle Drops)
-     Atomic Move ────────────────────► Moves cache/cache.live to cache/queue.cache.<timestamp>
+     Atomic Move ────────────────────► Moves cache/cache.live to cache/queue/cache.<timestamp>
           │
           ▼  (Hourly Cron)
   2. cron-run.csh + transform.awk ───► Writes to: /db/YYYY/
