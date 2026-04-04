@@ -14,11 +14,10 @@ It watches WMF EventsStream API for events of interest and charts them.
 * **`stream.csh`** - Runs continuously. Every 15 minutes the EventsStream API stops and restarts.
   * Extracts JSON records of interest into the file `cache/cache.live`.
   * During cycles, moves existing `cache.live` into `cache/queue.cache.<timestamp>`.
-* **`extract.awk`** - Piped by `stream.csh` - it extracts the JSON records of interest from the stream into `cache/cache.live`.
-* **`transform.awk`** - Runs from cron hourly via `cron-run.csh`. 
-  * Transforms the JSON data into the native db format of iabotwatch stored in `/db/YYYY`.
-* **`cron-run.csh`** - Runs from cron, wrapper for `transform.awk` and `makehtml.awk`, it also cycles files around.
-* **`makehtml.awk`** - Runs every X minutes and creates static HTML pages in `~/html` from the data in `~/db`.
+* **`extract.awk`** - Used by `stream.csh` - it extracts the JSON records of interest into `cache/cache.live`.
+* **`transform.awk`** - Runs via `cron-run.csh`. It processes ("transforms") the JSON files in `cache/queue.cache.<timestamp>` into the native db format of iabotwatch stored in `/db/YYYY`.
+* **`makehtml.awk`** - Runs via `cron-run.csh`. It creates the HTML report in `~/html` based on the data in `~/db` (that was created by `transform.awk`)
+* **`cron-run.csh`** - Runs from cron, wrapper for `transform.awk` and `makehtml.awk`, it also cycles files around, and pushes the final report up the web host, Toolforge.
 
 ```text
 [ Wikimedia EventStreams ]
@@ -34,6 +33,10 @@ It watches WMF EventsStream API for events of interest and charts them.
           │
           ▼  (Periodic Cron)
   3. makehtml.awk ───────────────────► Writes to: /html/
+          │
+          ▼  (Push to Toolforge)
+  4. https://... final report
+  
 ```
 
 * **The Producer** (`stream.csh` & `extract.awk`): Only cares about catching the data. It has no idea the database even exists.
