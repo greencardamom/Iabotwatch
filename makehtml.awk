@@ -88,7 +88,17 @@ function coma(s) {
 #
 # Convert a day of year (1..366) in a give year to a given form
 #
-function doy2cal(year,doy,form) {
+function doy2cal(year,doy,form,   t) {
+  # Use GNU awk native time functions to avoid forking subshells
+  # Calculate from Jan 1 12:00:00 (noon prevents DST shift edge cases)
+  t = mktime(year " 01 01 12 00 00") + ((doy - 1) * 86400)
+  return strftime(form, t)
+}
+
+#
+# Convert a day of year (1..366) in a give year to a given form
+#
+function doy2calOld(year,doy,form) {
         # NOTE: to convert from a year (2020) and day of year (347) to a calander date:
         #  date -d "347 days -1 day 2020-01-01" +"%Y%m%d"
   return strip(sys2var(Exe["date"] " -d \"" doy " days -1 day " year "-01-01\" +\"" form "\""))
@@ -143,49 +153,56 @@ function wutDomain(host) {
 function isItalic(lang,day,table,  url,fp,i,a,b,aa,ii,c,sw,sw2,sw3,so,su,ss) {
 
   if(P["curdoy"] != day && checkexists(P["ddir"] day ".italic.txt") ) {
-    fp = readfile(P["ddir"] day ".italic.txt")
+    
+    # --- MEMORY CACHE START ---
+    if (!(day in ParsedItalicCache)) {
+      ParsedItalicCache[day]["loaded"] = 1
+      fp = readfile(P["ddir"] day ".italic.txt")
 
-    if(fp ~ /===/) {  # New format 2021-01-02
-      c = split(fp, a, /=== Start/)
-      for(i = 1; i <= c; i++) {
-        a[i] = strip(a[i])
-        if(empty(a[i])) continue
-        for(ii = 1; ii <= splitn(a[i] "\n", aa, ii); ii++) {
-          aa[ii] = strip(aa[ii])
-          if(empty(aa[ii]) || aa[ii] ~ /End /) continue
-          if(aa[ii] ~ /^Web Table/) { sw = 1; so = 0; ss = 0; su = 0; sw2 = 0; sw3 = 0; continue }
-          if(aa[ii] ~ /^Details Table/) { sw = 0; so = 1; ss = 0; su = 0; sw2 = 0; sw3 = 0; continue }
-          if(aa[ii] ~ /^Details Sim Table/) { sw = 0; so = 0; ss = 1; su = 0; sw2 = 0; sw3 = 0; continue }
-          if(aa[ii] ~ /^Users Table/) { sw = 0; so = 0; ss = 0; su = 1; sw2 = 0; sw3 = 0; continue }
-          if(aa[ii] ~ /^Web2 Table/) { sw = 0; so = 0; ss = 0; su = 0; sw2 = 1; sw3 = 0; continue }
-          if(aa[ii] ~ /^Web3 Table/) { sw = 0; so = 0; ss = 0; su = 0; sw2 = 0; sw3 = 1; continue }
-          if(sw && table == "web") 
-            if(aa[ii] == lang) return 1
-          if(sw2 && table == "web2") 
-            if(aa[ii] == lang) return 1
-          if(sw3 && table == "web3") 
-            if(aa[ii] == lang) return 1
-          if(so && table == "other") 
-            if(aa[ii] == lang) return 1
-          if(ss && table == "other") 
-            if(aa[ii] == lang) return 1
-          if(su && table == "other") 
-            if(aa[ii] == lang) return 1
+      if(fp ~ /===/) {  # New format 2021-01-02
+        c = split(fp, a, /=== Start/)
+        for(i = 1; i <= c; i++) {
+          a[i] = strip(a[i])
+          if(empty(a[i])) continue
+          for(ii = 1; ii <= splitn(a[i] "\n", aa, ii); ii++) {
+            aa[ii] = strip(aa[ii])
+            if(empty(aa[ii]) || aa[ii] ~ /End /) continue
+            if(aa[ii] ~ /^Web Table/) { sw = 1; so = 0; ss = 0; su = 0; sw2 = 0; sw3 = 0; continue }
+            if(aa[ii] ~ /^Details Table/) { sw = 0; so = 1; ss = 0; su = 0; sw2 = 0; sw3 = 0; continue }
+            if(aa[ii] ~ /^Details Sim Table/) { sw = 0; so = 0; ss = 1; su = 0; sw2 = 0; sw3 = 0; continue }
+            if(aa[ii] ~ /^Users Table/) { sw = 0; so = 0; ss = 0; su = 1; sw2 = 0; sw3 = 0; continue }
+            if(aa[ii] ~ /^Web2 Table/) { sw = 0; so = 0; ss = 0; su = 0; sw2 = 1; sw3 = 0; continue }
+            if(aa[ii] ~ /^Web3 Table/) { sw = 0; so = 0; ss = 0; su = 0; sw2 = 0; sw3 = 1; continue }
+            
+            if(sw) ParsedItalicCache[day]["web"][aa[ii]] = 1
+            if(sw2) ParsedItalicCache[day]["web2"][aa[ii]] = 1
+            if(sw3) ParsedItalicCache[day]["web3"][aa[ii]] = 1
+            if(so || ss || su) ParsedItalicCache[day]["other"][aa[ii]] = 1
+          }
         }
       }
-      return 0
-    }
-    else { # Old format
-      if(table == "other") return 1
-      for(i = 1; i <= splitn(fp "\n", a, i); i++) {
-        split(a[i], b, " ")
-        if(b[1] == lang) {
-          return b[2]
+      else { # Old format
+        ParsedItalicCache[day]["old_format"] = 1
+        for(i = 1; i <= splitn(fp "\n", a, i); i++) {
+          split(a[i], b, " ")
+          ParsedItalicCache[day]["web"][b[1]] = b[2]
         }
       }
-      return 0
+    }
+    
+    # --- MEMORY CACHE LOOKUP ---
+    if (ParsedItalicCache[day]["old_format"] == 1) {
+        if(table == "other") return 1
+        if(lang in ParsedItalicCache[day]["web"]) return ParsedItalicCache[day]["web"][lang]
+        return 0
     }
 
+    if (table == "web" && ParsedItalicCache[day]["web"][lang] == 1) return 1
+    if (table == "web2" && ParsedItalicCache[day]["web2"][lang] == 1) return 1
+    if (table == "web3" && ParsedItalicCache[day]["web3"][lang] == 1) return 1
+    if (table == "other" && ParsedItalicCache[day]["other"][lang] == 1) return 1
+
+    return 0
   }
 
   return 0
@@ -302,7 +319,7 @@ function tableheader(class, c,b,i,day,month,year,out) {
     for(i = 1; i <= c; i++) {
       month = strip(b[i])
       if(!empty(month))
-        print "    <th><u>" sys2var("date --date=\"2000-" month "-01\" \"+%b\"") "</u></th>" >> out
+        print "    <th><u>" strftime("%b", mktime("2000 " month " 01 12 00 00")) "</u></th>" >> out
     }
     print "    <th><u>Total by Site</u></th>" >> out
   }

@@ -197,14 +197,63 @@ END {
         print HtmlOut[key] >> G["chunkfragment"]
     }
     close(G["chunkfragment"])
+
+    # --- FLUSH USERBOT TALLIES TO DISK ---
+    for (combo in UserbotCounts) {
+        split(combo, parts, SUBSEP)
+        target_log = parts[1]
+        t_wpsite = parts[2]
+        t_wpuser = parts[3]
+        
+        # Read existing file to memory to append/update
+        delete ExistingUB
+        if (checkexists(target_log ".userbots.txt")) {
+            while ((getline _ub_line < (target_log ".userbots.txt")) > 0) {
+                split(_ub_line, _ub_arr, /[ ][|][ ]/)
+                ExistingUB[_ub_arr[1], _ub_arr[2]] = int(_ub_arr[3])
+            }
+            close(target_log ".userbots.txt")
+        }
+        
+        # Update memory count
+        ExistingUB[t_wpsite, t_wpuser] += UserbotCounts[combo]
+        
+        # Rewrite the file sorted
+        temp_ub_file = target_log ".userbots.txt.temp"
+        sys2var("rm -f " temp_ub_file)
+        for (ub_combo in ExistingUB) {
+            split(ub_combo, ub_parts, SUBSEP)
+            print ub_parts[1] " | " ub_parts[2] " | " ExistingUB[ub_combo] >> temp_ub_file
+        }
+        close(temp_ub_file)
+        sys2var("/usr/bin/sort " temp_ub_file " > " target_log ".userbots.txt")
+        sys2var("rm -f " temp_ub_file)
+    }
 }
 
 # ==============================================================================
 # HELPER: PROCESS A SINGLE VALIDATED REVID
 # ==============================================================================
-function process_revid(revid, comment, timestamp, revert,    perp, wpsite, logfile, u, i, k, arrZ1, arrZ2, arrZ3, arrB1, arrB2, arrB3, url_data, lenZ1, lenZ2, lenZ3, lenB1, lenB2, lenB3, count, su, sus, aus, clean_wpsite, _line, _arr) {
+function process_revid(revid, comment, timestamp, revert,    perp, wpsite, logfile, u, i, k, arrZ1, arrZ2, arrZ3, arrB1, arrB2, arrB3, url_data, lenZ1, lenZ2, lenZ3, lenB1, lenB2, lenB3, count, su, sus, aus, clean_wpsite, _line, _arr, safe_api_dt, api_unix_dt) {
     
     if (revert == 1) return
+
+    # --- TIME DRIFT & PHANTOM EDIT FILTER ---
+    # Only run the time filter if the API successfully returned a timestamp
+    if (timestamp != "") {
+        safe_api_dt = timestamp
+        gsub(/[-T:Z]/, " ", safe_api_dt)
+        api_unix_dt = mktime(safe_api_dt, 1)
+
+        if (api_unix_dt > 0) {
+            # Discard if the revision is >24 hours older than the stream event
+            if ((HitData[revid, "unix_dt"] - api_unix_dt) > 86400) return
+            
+            # Discard if the WMF server clock drifted >60s into the future (T303907)
+            if ((systime() - api_unix_dt) < -60) return
+        }
+    }
+    # ----------------------------------------
 
     perp = HitData[revid, "perp"]
     wpsite = HitData[revid, "wpsite"]
@@ -225,32 +274,22 @@ function process_revid(revid, comment, timestamp, revert,    perp, wpsite, logfi
     # Get logfile path (Pass raw unix time for strict GMT sorting)
     logfile = getlogfile(HitData[revid, "unix_dt"])
 
-    # --- DEDUPLICATION LOGIC START ---
+    # --- DEDUPLICATION LOGIC ---
     clean_wpsite = gsubi("wiki$", "", wpsite)
-    
-    # Load the existing logfile into memory once per script execution
     if (LoadedLogfiles[logfile] == "") {
         LoadedLogfiles[logfile] = 1
         if (checkexists(logfile ".txt")) {
             while ((getline _line < (logfile ".txt")) > 0) {
                 split(_line, _arr, " ")
-                if (_arr[2] != "") {
-                    # _arr[1] is wpsite, _arr[2] is revid
-                    ProcessedRevids[_arr[1] "_" _arr[2]] = 1
-                }
+                if (_arr[2] != "") ProcessedRevids[_arr[1] "_" _arr[2]] = 1
             }
             close(logfile ".txt")
         }
     }
-
-    # Abort if we have already written this wpsite+revid combo to the log
     if (ProcessedRevids[clean_wpsite "_" revid] == 1) return
-    
-    # Add to runtime memory so we don't duplicate it later in this same run
     ProcessedRevids[clean_wpsite "_" revid] = 1
-    # --- DEDUPLICATION LOGIC END ---
 
-    # Decode counts perfectly, explicitly checking for empty arrays
+    # Decode counts
     lenZ1 = (HitLists[revid, "Z1"] == "") ? 0 : split(HitLists[revid, "Z1"], arrZ1, "\\|\\|") - 1
     lenZ2 = (HitLists[revid, "Z2"] == "") ? 0 : split(HitLists[revid, "Z2"], arrZ2, "\\|\\|") - 1
     lenZ3 = (HitLists[revid, "Z3"] == "") ? 0 : split(HitLists[revid, "Z3"], arrZ3, "\\|\\|") - 1
@@ -261,13 +300,17 @@ function process_revid(revid, comment, timestamp, revert,    perp, wpsite, logfi
     # Print to master logfile
     print clean_wpsite " " revid " " lenZ1 " " lenB1 " " lenB2 " " lenZ2 " " lenZ3 " " lenB3 >> logfile ".txt"
     close(logfile ".txt")
+    
+    # --- RESTORED USERBOT TALLY ---
+    if (lenZ3 > 0) {
+        UserbotCounts[logfile, clean_wpsite, HitData[revid, "wpuser"]] += lenZ3
+    }
 
-    # Generate HTML Rows and save to chronological array
+    # Generate HTML Rows...
     if (lenZ1 > 0) {
         for (i=1; i<=lenZ1; i++) {
             split(arrZ1[i], url_data, "\\|")
-            u = url_data[1]
-            count = int(url_data[2])
+            u = url_data[1]; count = int(url_data[2])
             for(k=1; k<=count; k++) {
                 su = u; sub("https?://web.archive.org/(web/)?[^/]*[/]", "", su)
                 sus = substr(su, 1, 50); aus = substr(u, 1, 50)
@@ -278,8 +321,7 @@ function process_revid(revid, comment, timestamp, revert,    perp, wpsite, logfi
 
     if (lenB1 > 0) {
         for (i=1; i<=lenB1; i++) {
-            split(arrB1[i], url_data, "\\|")
-            u = url_data[1]
+            split(arrB1[i], url_data, "\\|"); u = url_data[1]
             if (u ~ /[?]query/) continue
             HtmlOut[HitData[revid, "datetime"] "_" revid "_B1_" i] = "<tr><td>" HitData[revid, "datetime"] "</td> <td>" wpsite "</td> <td>" perp "</td> <td><a href=\"https://archive.org/details/" u "\">" u "</a></td> <td>n/a</td> <td><a href=\"" HitData[revid, "uri"] "\">" HitData[revid, "wpname"] "</a></td></tr>"
             print u " " clean_wpsite " " revid " " perp >> logfile ".details.txt"
@@ -289,8 +331,7 @@ function process_revid(revid, comment, timestamp, revert,    perp, wpsite, logfi
     
     if (lenB2 > 0) {
         for (i=1; i<=lenB2; i++) {
-            split(arrB2[i], url_data, "\\|")
-            u = url_data[1]
+            split(arrB2[i], url_data, "\\|"); u = url_data[1]
             HtmlOut[HitData[revid, "datetime"] "_" revid "_B2_" i] = "<tr><td>" HitData[revid, "datetime"] "</td> <td>" wpsite "</td> <td>" perp "</td> <td><a href=\"https://archive.org/details/" u "\">" u "</a></td> <td>n/a</td> <td><a href=\"" HitData[revid, "uri"] "\">" HitData[revid, "wpname"] "</a></td></tr>"
             print u " " clean_wpsite " " revid " " perp >> logfile ".details.txt"
         }
@@ -299,14 +340,14 @@ function process_revid(revid, comment, timestamp, revert,    perp, wpsite, logfi
 
     if (lenB3 > 0) {
         for (i=1; i<=lenB3; i++) {
-            split(arrB3[i], url_data, "\\|")
-            u = url_data[1]
+            split(arrB3[i], url_data, "\\|"); u = url_data[1]
             HtmlOut[HitData[revid, "datetime"] "_" revid "_B3_" i] = "<tr><td>" HitData[revid, "datetime"] "</td> <td>" wpsite "</td> <td>" perp "</td> <td><a href=\"https://archive.org/details/" u "\">" u "</a></td> <td>n/a</td> <td><a href=\"" HitData[revid, "uri"] "\">" HitData[revid, "wpname"] "</a></td></tr>"
             print u " " clean_wpsite " " revid " " perp >> logfile ".details.txt"
         }
         close(logfile ".details.txt")
     }
 }
+
 
 function getlogfile(unix_dt,  year, doy) {
     # Generate DB paths natively in GMT/UTC

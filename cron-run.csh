@@ -5,11 +5,13 @@ setenv AWKPATH .:/home/greenc/BotWikiAwk/lib:/usr/local/share/awk
 set cache_dir = "$IABOTWATCH""cache"
 set queue_dir = "$cache_dir/queue"
 set proc_dir  = "$cache_dir/processing"
+set done_dir  = "$cache_dir/done"
 
-# Ensure directories exists
+# Ensure directories exist
 mkdir -p "$cache_dir"
 mkdir -p "$queue_dir"
 mkdir -p "$proc_dir"
+mkdir -p "$done_dir"
 
 # 1. Check if there are actually files in the drop-zone
 set has_files = `find "$queue_dir" -maxdepth 1 -name "cache.*" | head -n 1`
@@ -20,6 +22,13 @@ $MV "$queue_dir"/cache.* "$proc_dir"/
 
 # 3. Run the standalone AWK script ONLY on the locked files
 "$IABOTWATCH"transform.awk "$proc_dir"/cache.*
+set awk_status = $status
+
+# 3b. Halt and preserve files if the AWK script crashed
+if ($awk_status != 0) then
+    $ECHO "`$DATE '+%Y-%m-%d %H:%M:%S'` [CRON] transform.awk failed with status $awk_status. Halting." >> "$monitor_log"
+    exit 1
+endif
 
 # 4. HTML Log Rolling
 set frag = "$IABOTWATCH""cache/chunkfragment.html"
@@ -33,5 +42,9 @@ endif
 
 $CAT "$IABOTWATCH""headerlogroll.html" "$all" "$IABOTWATCH""footer.html" > "$IABOTWATCH""wwwlogroll/iabotwatch.html"
 
-# 5. Destroy ONLY the files we actually processed
-$RM -f "$proc_dir"/cache.*
+# 5. Archive processed files instead of destroying them (Keep for 3 days)
+$MV "$proc_dir"/cache.* "$done_dir"/
+find "$done_dir" -type f -name "cache.*" -mtime +3 -delete
+
+# 6. Generate web tables
+"$IABOTWATCH"makehtml.awk

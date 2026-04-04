@@ -7,50 +7,71 @@ The product is "InternetArchiveBot Dashboard" and the program that generates it 
 How it works
 ==========
 
-* moniabw.awk runs from cron every 5 minutes to check that iabotwatch.csh is running and if not starts iabotwatch.csh
+Architecture is a Producer/Consumer aka ETL model (Extract, Transform, Load)
 
-* iabotwatch.csh runs curl pulling an EventStream (ES) and pipes the stream through iabotwatch.awk - ES halts on the MediaWiki side about every 15 minutes, so the script has an endless loop that restarts the curl command. During the restarts, the script shuffles data files around, makes new directories as months and years roll over, etc..
+It watches WMF EventsStream API for events of interest and charts them.
 
-* iabotwatch.awk takes as input a single JSON record from the ES. It parses the JSON and records the statistics in the ~/www/db/<year>/<day>.txt file. It records other things like URLs with an archive.org/details etc.. whatever we want to track
+* **`stream.csh`** - Runs continuously. Every 15 minutes the EventsStream API stops and restarts.
+  * Extracts JSON records of interest into the file `cache/cache.live`.
+  * During cycles, moves existing `cache.live` into `cache/queue.cache.<timestamp>`.
+* **`extract.awk`** - Piped by `stream.csh` - it extracts the JSON records of interest from the stream into `cache/cache.live`.
+* **`transform.awk`** - Runs from cron hourly via `cron-run.csh`. 
+  * Transforms the JSON data into the native db format of iabotwatch stored in `/db/YYYY`.
+* **`cron-run.csh`** - Runs from cron, wrapper for `transform.awk` and `makehtml.awk`, it also cycles files around.
+* **`makehtml.awk`** - Runs every X minutes and creates static HTML pages in `~/html` from the data in `~/db`.
 
-* makehtml.awk runs about once an hour. It rebuilds the HTML files in ~/www/<year> by parsing the data files in  ~/www/db/<year>
+```text
+[ Wikimedia EventStreams ]
+          │
+          ▼  (Continuous Connection)
+  1. stream.csh + extract.awk ───────► Writes to: cache/cache.live
+          │
+          ▼  (~15 Min Cycle Drops)
+     Atomic Move ────────────────────► Spools to: cache/queue.cache.<timestamp>
+          │
+          ▼  (Hourly Cron)
+  2. cron-run.csh + transform.awk ───► Writes to: /db/YYYY/
+          │
+          ▼  (Periodic Cron)
+  3. makehtml.awk ───────────────────► Writes to: /html/
+```
 
-For an understanding how the ~/www/db files are structured, see ~/www/db/Documentation.txt
+* **The Producer** (`stream.csh` & `extract.awk`): Only cares about catching the data. It has no idea the database even exists.
+* **The Consumer** (`transform.awk`): Only cares about processing files in the queue. It doesn't care where the stream comes from or if the WMF connection goes down.
 
-Dependencies
-====
+For a schema on how the `~/www/db` files are structured, see `~/www/db/Documentation.txt`.
+
+## Dependencies
+
 * GNU awk 4.1+
 * tcsh
-* BotWikiAwk library
+* [BotWikiAwk](https://github.com/greencardamom/BotWikiAwk) library
 
-Setup 
-=====
-* Install tcsh eg
+## Setup 
 
-        sudo apt-get install tcsh
+* Install `tcsh`, e.g.:
+  ```bash
+  sudo apt-get install tcsh
+  ```
 
-* Install BotWikiAwk library
+* Install BotWikiAwk library:
+  ```bash
+  cd ~ 
+  git clone [https://github.com/greencardamom/BotWikiAwk](https://github.com/greencardamom/BotWikiAwk)
+  export AWKPATH=.:/home/user/BotWikiAwk/lib:/usr/share/awk
+  export PATH=$PATH:/home/user/BotWikiAwk/bin
+  cd ~/BotWikiAwk
+  ./setup.sh
+  ```
+  *(Read `SETUP` for further instructions, e.g., setting up email).*
 
-        cd ~ 
-        git clone 'https://github.com/greencardamom/BotWikiAwk'
-        export AWKPATH=.:/home/user/BotWikiAwk/lib:/usr/share/awk
-        export PATH=$PATH:/home/user/BotWikiAwk/bin
-        cd ~/BotWikiAwk
-        ./setup.sh
-        read SETUP for further instructions eg. setting up email
+* All of the files are assumed to have some hard-coded paths. Edit each and check for changes specific to your system.
+* This distribution is configured to use Toolforge as the web host. It uses `rsync` to mirror the local `~/www` directories to Toolforge. The script `push.csh` does the mirroring. Edit this script to adjust paths and logins. Or use a different web hosting method. It assumes you have passwordless ssh setup.
+* This distribution does not include the data and HTML files in `~/www/db/*` and `~/www/*` respectively. They can be downloaded from Toolforge, or contact the sysadmins there for backups.
 
-* All of the files are assumed to have some hard coded paths. Edit each and check for changes specific to your system.
+## Credits
 
-* This distribution is configured to use Toolforge as the web host. It uses rsync to mirror the local ~/www directories to Toolforge. The script "push.csh" does the mirroring. Edit this script to adjust paths and logins. Or use a different web hosting method. It assumes you have passwordless ssh setup.
+by User:GreenC (en.wikipedia.org)  
+MIT License Copyright 2026
 
-* This distribtion does not include the data and html files in ~/www/db/* and ~/www/* respectively. They can be downloaded from Toolforge or contact the sysadmins there for backups.
-
-Credits
-==================
-by User:GreenC (en.wikipedia.org)
-
-MIT License Copyright 2024
-
-Iabotwatch uses the BotWikiAwk framework of tools and libraries for building and running bots on Wikipedia
-
-https://github.com/greencardamom/BotWikiAwk
+Iabotwatch uses the [BotWikiAwk](https://github.com/greencardamom/BotWikiAwk) framework of tools and libraries for building and running bots on Wikipedia.
