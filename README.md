@@ -17,7 +17,8 @@ It watches WMF EventsStream API for events of interest and charts them.
 * **`extract.awk`** - Used by `iabw-stream.csh` - it extracts the JSON records of interest into `cache/cache.live`.
 * **`transform.awk`** - Runs via `cron-run.csh`. It processes ("transforms") the JSON files in `cache/queue/cache.<timestamp>` into the native db format of iabotwatch stored in `/db/YYYY`.
 * **`makehtml.awk`** - Runs via `cron-run.csh`. It creates the HTML report in `~/html` based on the data in `~/db` (that was created by `transform.awk`)
-* **`cron-run.csh`** - Runs from cron, wrapper for `transform.awk` and `makehtml.awk`, it also cycles files around, and pushes the final report up the web host, Toolforge.
+* **`cron-run.csh`** - Runs from cron, wrapper for `transform.awk` and `makehtml.awk`, it also cycles files, and pushes the final report to the web host, Toolforge.
+* **`moniabw.awk`** - Healthcheck script restarts `iabw-stream.csh` if not running.
 
 ```text
 [ Wikimedia EventStreams ]
