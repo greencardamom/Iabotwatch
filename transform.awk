@@ -219,7 +219,7 @@ END {
         ExistingUB[t_wpsite, t_wpuser] += UserbotCounts[combo]
         
         # Rewrite the file sorted
-        temp_ub_file = target_log ".userbots.txt.temp"
+        temp_ub_file = "/tmp/iabw_ub_" PROCINFO["pid"] ".tmp"
         sys2var("rm -f " temp_ub_file)
         for (ub_combo in ExistingUB) {
             split(ub_combo, ub_parts, SUBSEP)

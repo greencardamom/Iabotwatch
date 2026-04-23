@@ -13,6 +13,26 @@ mkdir -p "$queue_dir"
 mkdir -p "$proc_dir"
 mkdir -p "$done_dir"
 
+# 0. Prevent overlapping executions and handle stale locks
+set lockfile = "$IABOTWATCH""cron.lock"
+if (-e "$lockfile") then
+    set old_pid = `cat "$lockfile"`
+    
+    # kill -0 returns 0 if alive, non-zero if dead
+    kill -0 $old_pid >& /dev/null
+    
+    if ($status == 0) then
+        # Process is still running; exit without doing anything
+        exit 0
+    else
+        # Process is dead; stale lock detected. Log it and remove the lock.
+        $ECHO "`$DATE '+%Y-%m-%d %H:%M:%S'` [CRON] Stale lock detected for dead PID $old_pid. Recovering." >> "$monitor_log"
+        rm -f "$lockfile"
+    endif
+endif
+# Claim the lock with the current script's PID
+echo $$ > "$lockfile"
+
 # 1. Check if there are actually files in the drop-zone
 set has_files = `find "$queue_dir" -maxdepth 1 -name "cache.*" | head -n 1`
 if ("$has_files" == "") exit 0
@@ -27,6 +47,7 @@ set awk_status = $status
 # 3b. Halt and preserve files if the AWK script crashed
 if ($awk_status != 0) then
     $ECHO "`$DATE '+%Y-%m-%d %H:%M:%S'` [CRON] transform.awk failed with status $awk_status. Halting." >> "$monitor_log"
+    rm -f "$lockfile"
     exit 1
 endif
 
@@ -48,3 +69,6 @@ find "$done_dir" -type f -name "cache.*" -mtime +3 -delete
 
 # 6. Generate web tables
 "$IABOTWATCH"makehtml.awk
+
+# 7. Release lock
+rm -f "$lockfile"
