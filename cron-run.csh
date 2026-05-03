@@ -13,13 +13,20 @@ mkdir -p "$queue_dir"
 mkdir -p "$proc_dir"
 mkdir -p "$done_dir"
 
+# Rescue stranded files from a previous crashed run
+set stranded = `find "$proc_dir" -maxdepth 1 -name "cache.*" | head -n 1`
+if ("$stranded" != "") then
+    $ECHO "`$DATE '+%Y-%m-%d %H:%M:%S'` [CRON] Rescuing stranded files from processing zone." >> "$monitor_log"
+    $MV "$proc_dir"/cache.* "$queue_dir"/
+endif
+
 # 0. Prevent overlapping executions and handle stale locks
 set lockfile = "$IABOTWATCH""cron.lock"
 if (-e "$lockfile") then
     set old_pid = `cat "$lockfile"`
     
     # kill -0 returns 0 if alive, non-zero if dead
-    kill -0 $old_pid >& /dev/null
+    /bin/kill -0 $old_pid >& /dev/null
     
     if ($status == 0) then
         # Process is still running; exit without doing anything
@@ -37,8 +44,8 @@ echo $$ > "$lockfile"
 set has_files = `find "$queue_dir" -maxdepth 1 -name "cache.*" | head -n 1`
 if ("$has_files" == "") exit 0
 
-# 2. ATOMIC MOVE: Snatch all current files out of the drop-zone into the lock-zone
-$MV "$queue_dir"/cache.* "$proc_dir"/
+# 2. BATCHED ATOMIC MOVE: Snatch up to 24 files (6 hours of data) into the lock-zone. To get more let cron-run repeat 
+find "$queue_dir" -maxdepth 1 -name "cache.*" | head -n 24 | xargs -I {} mv {} "$proc_dir"/
 
 # 3. Run the standalone AWK script ONLY on the locked files
 "$IABOTWATCH"transform.awk "$proc_dir"/cache.*
