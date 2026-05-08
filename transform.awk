@@ -91,12 +91,12 @@ BEGIN {
                         }
                     }
 
-                    if(url ~ "/archive.org/details/") {
-                        if(match(url, "details[/][^$/]+[^$/]", d) > 0) {
-                            key = gsubi("(details[/]|[/]page[/][^$/]+[^$/])","",d[0])
-                            if(json ~ "InternetArchiveBot") {
-                                if(!(wpsite == "arzwiki" && (key == "periodictableits0000scer" || key == "naturesbuildingb0000emsl" || key == "elementsvisualex0000gray"))) {
-                                    if(url ~ "/details/sim_") URLB3[key] = 1
+                    if (url ~ "/archive.org/details/") {
+                        if (match(url, /details\/([^/]+)/, d)) {
+                            key = d[1]
+                            if (json ~ "InternetArchiveBot") {
+                                if (!(wpsite == "arzwiki" && (key == "periodictableits0000scer" || key == "naturesbuildingb0000emsl" || key == "elementsvisualex0000gray"))) {
+                                    if (url ~ "/details/sim_") URLB3[key] = 1
                                     else URLB1[key] = 1
                                 }
                             } else URLB2[key] = 1
