@@ -234,7 +234,7 @@ END {
 # ==============================================================================
 # HELPER: PROCESS A SINGLE VALIDATED REVID
 # ==============================================================================
-function process_revid(revid, comment, timestamp, revert,    perp, wpsite, logfile, u, i, k, arrZ1, arrZ2, arrZ3, arrB1, arrB2, arrB3, url_data, lenZ1, lenZ2, lenZ3, lenB1, lenB2, lenB3, count, su, sus, aus, clean_wpsite, _line, _arr, safe_api_dt, api_unix_dt) {
+function process_revid(revid, comment, timestamp, revert,    perp, wpsite, logfile, u, i, k, arrZ1, arrZ2, arrZ3, arrB1, arrB2, arrB3, url_data, lenZ1, lenZ2, lenZ3, lenB1, lenB2, lenB3, count, su, sus, aus, clean_wpsite, _line, _arr, safe_api_dt, api_unix_dt, isSim, _ri, _stamp) {
     
     if (revert == 1) return
 
@@ -296,6 +296,28 @@ function process_revid(revid, comment, timestamp, revert,    perp, wpsite, logfi
     lenB1 = (HitLists[revid, "B1"] == "") ? 0 : split(HitLists[revid, "B1"], arrB1, "\\|\\|") - 1
     lenB2 = (HitLists[revid, "B2"] == "") ? 0 : split(HitLists[revid, "B2"], arrB2, "\\|\\|") - 1
     lenB3 = (HitLists[revid, "B3"] == "") ? 0 : split(HitLists[revid, "B3"], arrB3, "\\|\\|") - 1
+
+    # --- RECLASSIFY GreenC bot details by edit-summary stamp (books vs sim) ---
+    # A GreenC bot (noisbn) edit is entirely book OR entirely sim; the category is
+    # encoded in the summary's date stamp, e.g. (20260616sim) / (20260616simdark)
+    # for sim, bare (20260616) for books. The sim_ URL prefix is no longer reliable
+    # (sim runs now also add journal IDs without it), so route the whole edit's
+    # details links to one bucket based on the stamp. If no stamp is found, leave
+    # the Pass-1 sim_ prefix split in place as a fallback.
+    if (perp == "greencbot" && (lenB1 > 0 || lenB3 > 0)) {
+        if (match(comment, /[(][0-9]{8,12}[^)]*[)]/, _stamp)) {
+            isSim = (_stamp[0] ~ /sim/) ? 1 : 0
+            if (isSim) {                                    # fold books bucket into sim
+                for (_ri = 1; _ri <= lenB1; _ri++) arrB3[lenB3 + _ri] = arrB1[_ri]
+                lenB3 += lenB1
+                lenB1 = 0
+            } else {                                        # fold sim bucket into books
+                for (_ri = 1; _ri <= lenB3; _ri++) arrB1[lenB1 + _ri] = arrB3[_ri]
+                lenB1 += lenB3
+                lenB3 = 0
+            }
+        }
+    }
 
     # Print to master logfile
     print clean_wpsite " " revid " " lenZ1 " " lenB1 " " lenB2 " " lenZ2 " " lenZ3 " " lenB3 >> logfile ".txt"
