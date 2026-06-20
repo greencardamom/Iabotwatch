@@ -13,13 +13,6 @@ mkdir -p "$queue_dir"
 mkdir -p "$proc_dir"
 mkdir -p "$done_dir"
 
-# Rescue stranded files from a previous crashed run
-set stranded = `find "$proc_dir" -maxdepth 1 -name "cache.*" | head -n 1`
-if ("$stranded" != "") then
-    $ECHO "`$DATE '+%Y-%m-%d %H:%M:%S'` [CRON] Rescuing stranded files from processing zone." >> "$monitor_log"
-    $MV "$proc_dir"/cache.* "$queue_dir"/
-endif
-
 # 0. Prevent overlapping executions and handle stale locks
 set lockfile = "$IABOTWATCH""cron.lock"
 if (-e "$lockfile") then
@@ -40,9 +33,22 @@ endif
 # Claim the lock with the current script's PID
 echo $$ > "$lockfile"
 
+# Rescue stranded files from a previous crashed run. MUST run AFTER claiming the
+# lock: when two cron instances overlap and both rescue, one moves the files and
+# the other's glob matches nothing, which tcsh aborts as "mv: No match". Using
+# find -exec also makes the move a no-op (not an error) when there is nothing.
+set stranded = `find "$proc_dir" -maxdepth 1 -name "cache.*" | head -n 1`
+if ("$stranded" != "") then
+    $ECHO "`$DATE '+%Y-%m-%d %H:%M:%S'` [CRON] Rescuing stranded files from processing zone." >> "$monitor_log"
+    find "$proc_dir" -maxdepth 1 -name "cache.*" -exec "$MV" {} "$queue_dir"/ \;
+endif
+
 # 1. Check if there are actually files in the drop-zone
 set has_files = `find "$queue_dir" -maxdepth 1 -name "cache.*" | head -n 1`
-if ("$has_files" == "") exit 0
+if ("$has_files" == "") then
+    rm -f "$lockfile"
+    exit 0
+endif
 
 # 2. BATCHED ATOMIC MOVE: Snatch up to 24 files (6 hours of data) into the lock-zone. To get more let cron-run repeat 
 find "$queue_dir" -maxdepth 1 -name "cache.*" | head -n 24 | xargs -I {} mv {} "$proc_dir"/
@@ -71,7 +77,7 @@ endif
 $CAT "$IABOTWATCH""headerlogroll.html" "$all" "$IABOTWATCH""footer.html" > "$IABOTWATCH""wwwlogroll/iabotwatch.html"
 
 # 5. Archive processed files instead of destroying them (Keep for 3 days)
-$MV "$proc_dir"/cache.* "$done_dir"/
+find "$proc_dir" -maxdepth 1 -name "cache.*" -exec "$MV" {} "$done_dir"/ \;
 find "$done_dir" -type f -name "cache.*" -mtime +3 -delete
 
 # 6. Generate web tables
