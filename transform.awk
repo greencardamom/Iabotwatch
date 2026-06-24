@@ -384,8 +384,16 @@ function getlogfile(unix_dt,  year, doy) {
     return G["dbdir"] year "/" doy 
 }
 
-function wmf_api_fetch(url,  command, op) {
-     command = "wikiget -U " shquote(url)
+function wmf_api_fetch(url,  command, op, logf) {
+     # Suppress wikiget's stderr ("No response or fatal HTTP error." after its
+     # retries expire) so it stops generating cron mail; sys2var captures stdout
+     # only, so that stderr would otherwise leak straight to the cron daemon.
+     command = "wikiget -U " shquote(url) " 2>/dev/null"
      op = sys2var(command)
-     return op
+     if (empty(strip(op))) {
+         logf = G["home"] "transform.log"
+         print strftime("%Y-%m-%d %H:%M:%S", systime()) " transform.awk wmf_api_fetch() empty_wikiget " strip(url) >> logf
+         close(logf)
+     }
+     return strip(op)
 }
