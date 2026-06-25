@@ -388,7 +388,13 @@ function wmf_api_fetch(url,  command, op, logf) {
      # Suppress wikiget's stderr ("No response or fatal HTTP error." after its
      # retries expire) so it stops generating cron mail; sys2var captures stdout
      # only, so that stderr would otherwise leak straight to the cron daemon.
-     command = "wikiget -U " shquote(url) " 2>/dev/null"
+     # -O soft: try OAuth first (higher rate limits on the main wikis), but fall
+     # back to anonymous immediately when OAuth is rejected. Some small wikis
+     # (e.g. isv.wikipedia.org) return a permanent mwoauth-invalid-authorization-
+     # not-approved for the bot's grant; these are public reads, so anonymous
+     # succeeds. Without this, wikiget retry-storms and returns empty, silently
+     # dropping the whole revid chunk from the dashboard.
+     command = "wikiget -U " shquote(url) " -O soft 2>/dev/null"
      op = sys2var(command)
      if (empty(strip(op))) {
          logf = G["home"] "transform.log"
