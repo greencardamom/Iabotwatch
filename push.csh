@@ -1,85 +1,67 @@
 #!/usr/bin/tcsh
 
-# Push files from a local directory to a remote directory on Toolforge.
-# "--delete" keeps the dirs in sync; otherwise only new files are uploaded.
+# Push files from a local directory to a remote directory. If "--delete" then it keeps the directories in sync. Otherwise it only uploads new files.
 # More info:
 #   https://wikitech.wikimedia.org/wiki/Help:Toolforge/Tool_Accounts#Transfer_files
 #
-# RESILIENCE: login.toolforge.org is a load-balanced bastion; a momentary SSH-transport
-# blip shows up as rsync exit 255 "connection unexpectedly closed (0 bytes received)".
-# We retry with linear backoff and ONLY fail if every attempt fails. Each attempt's stderr
-# is captured to a temp file (not emitted), so a single transient blip is silent and the
-# upload still lands; a genuine outage surfaces the real error + a summary and exits 1.
-# (push is called from makehtml.awk via sys2var(), which captures STDOUT, so anything we
-# want visible in cron mail must go to STDERR.) ConnectTimeout bounds a hung connect.
+# ACTIVE targets (invoked by cron/scripts): peerr, iabotwatch, iabotwatchlogroll, iabotwatchroot.
+# The DISABLED block at the bottom holds targets not called by anything currently:
+#   arcstat / arcstat-iadetails -> now handled by ~/repos/gh/Arcstat/push.csh
+#                                  (and /home/greenc/toolforge/arcstat/iadetails/ no longer exists)
+#   awsexp                      -> no caller
+#   archivebak                  -> was malformed (unterminated -e quote); local backup, not toolforge
+# To re-enable one, uncomment it and re-verify its source + remote path first.
 
-if ($#argv == 0) then
+if($#argv == 0) then
   echo ""
   echo "push - mirror files to toolforge"
   echo ""
   echo "  ./push <name>"
   echo "  ./push <name> v  -- for verbose progress of files uploaded and deleted"
   echo ""
-  exit 1
 endif
 
-set v = ""
-if ($#argv >= 2) then
-  if ("$2" == "v") set v = "--progress"
+if($2 == "v") then
+  set v="--progress"
+else
+  set v=""
 endif
 
-# Common rsync transport/options, shared by every target.
-set rsh   = "/usr/bin/ssh -S none -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -E /dev/null -o LogLevel=error -o ConnectTimeout=15"
-set rpath = "sudo -u tools.botwikiawk rsync"
-set chmod = "Dug=rwx,Dg+s,Do=rx,Fug=rw,Fo=r"
-
-# Per-target: source dir, remote dest, and whether to mirror-delete.
-set src = ""
-set dst = ""
-set del = ""
-
-if ($1 == "iabotwatch") then
-  set del = "--delete"
-  set src = "/home/greenc/toolforge/iabotwatch/www/"
-  set dst = "login.toolforge.org:/data/project/botwikiawk/www/static/dashdaily/"
-endif
-if ($1 == "iabotwatchlogroll") then
-  set del = "--delete"
-  set src = "/home/greenc/toolforge/iabotwatch/wwwlogroll/"
-  set dst = "login.toolforge.org:/data/project/botwikiawk/www/static/iabotwatch/"
-endif
-if ($1 == "iabotwatchroot") then
-  # Don't delete anything in remote dir
-  set del = ""
-  set src = "/home/greenc/toolforge/iabotwatch/wwwroot/"
-  set dst = "login.toolforge.org:/data/project/botwikiawk/www/static/"
+if($1 == "peerr") then
+  /usr/bin/rsync $v --delete --delay-updates -F --compress --archive --no-owner --no-group --rsh='/usr/bin/ssh -S none -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -E /dev/null -o LogLevel=error' --rsync-path='sudo -u tools.botwikiawk /usr/bin/rsync' --chmod=Dug=rwx,Dg+s,Do=rx,Fug=rw,Fo=r /home/greenc/toolforge/peerr/www/ login.toolforge.org:/data/project/botwikiawk/www/static/peerr/
 endif
 
-if ("$src" == "") then
-  echo "push.csh: unknown target '$1' - nothing to do." >> /dev/stderr
-  exit 0
+if($1 == "iabotwatch") then
+  /usr/bin/rsync $v --delete --delay-updates -F --compress --archive --no-owner --no-group --rsh='/usr/bin/ssh -S none -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -E /dev/null -o LogLevel=error' --rsync-path='sudo -u tools.botwikiawk rsync' --chmod=Dug=rwx,Dg+s,Do=rx,Fug=rw,Fo=r /home/greenc/toolforge/iabotwatch/www/ login.toolforge.org:/data/project/botwikiawk/www/static/dashdaily/
 endif
 
-# rsync with retry + linear backoff (10s, 20s). Capture each attempt's stderr so transient
-# failures are silent; only a total failure prints the real reason to cron mail.
-set err = "/tmp/push.$$.err"
-set max = 3
-set n = 1
-while ($n <= $max)
-  ( rsync $v $del --delay-updates -F --compress --archive --no-owner --no-group --rsh="$rsh" --rsync-path="$rpath" --chmod="$chmod" "$src" "$dst" > /dev/null ) >& "$err"
-  if ($status == 0) then
-    rm -f "$err"
-    exit 0
-  endif
-  if ($n < $max) then
-    @ backoff = $n * 10
-    sleep $backoff
-  endif
-  @ n++
-end
+if($1 == "iabotwatchlogroll") then
+  /usr/bin/rsync $v --delete --delay-updates -F --compress --archive --no-owner --no-group --rsh='/usr/bin/ssh -S none -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -E /dev/null -o LogLevel=error' --rsync-path='sudo -u tools.botwikiawk rsync' --chmod=Dug=rwx,Dg+s,Do=rx,Fug=rw,Fo=r /home/greenc/toolforge/iabotwatch/wwwlogroll/ login.toolforge.org:/data/project/botwikiawk/www/static/iabotwatch/
+endif
 
-# Every attempt failed - surface the real rsync error + a summary, then fail loudly.
-echo "push.csh: rsync of '$1' to $dst FAILED after $max attempts (transient Toolforge SSH/transport?):" >> /dev/stderr
-cat "$err" >> /dev/stderr
-rm -f "$err"
-exit 1
+# Don't delete anything in remote dir
+if($1 == "iabotwatchroot") then
+  /usr/bin/rsync $v --delay-updates -F --compress --archive --no-owner --no-group --rsh='/usr/bin/ssh -S none -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -E /dev/null -o LogLevel=error' --rsync-path='sudo -u tools.botwikiawk rsync' --chmod=Dug=rwx,Dg+s,Do=rx,Fug=rw,Fo=r /home/greenc/toolforge/iabotwatch/wwwroot/ login.toolforge.org:/data/project/botwikiawk/www/static/
+endif
+
+# ─────────────────────────── DISABLED (not in use) ───────────────────────────
+# arcstat + arcstat-iadetails are now handled by ~/repos/gh/Arcstat/push.csh.
+#if($1 == "arcstat") then
+#  /usr/bin/rsync $v --delete --delay-updates -F --compress --archive --no-owner --no-group --rsh='/usr/bin/ssh -S none -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -E /dev/null -o LogLevel=error' --rsync-path='sudo -u tools.botwikiawk rsync' --chmod=Dug=rwx,Dg+s,Do=rx,Fug=rw,Fo=r /home/greenc/toolforge/arcstat/www/ login.toolforge.org:/data/project/botwikiawk/www/static/dashclassic/
+#endif
+
+# NOTE: source /home/greenc/toolforge/arcstat/iadetails/ no longer exists.
+#if($1 == "arcstat-iadetails") then
+#  /usr/bin/rsync $v --delete --delay-updates -F --compress --archive --no-owner --no-group --rsh='/usr/bin/ssh -S none -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -E /dev/null -o LogLevel=error' --rsync-path='sudo -u tools.botwikiawk rsync' --chmod=Dug=rwx,Dg+s,Do=rx,Fug=rw,Fo=r /home/greenc/toolforge/arcstat/iadetails/ login.toolforge.org:/data/project/botwikiawk/www/static/iadetails/
+#endif
+
+# awsexp: no current caller.
+#if($1 == "awsexp") then
+#  /usr/bin/rsync $v --delete --delay-updates -F --compress --archive --no-owner --no-group --rsh='/usr/bin/ssh -S none -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -E /dev/null -o LogLevel=error' --rsync-path='sudo -u tools.botwikiawk rsync' --chmod=Dug=rwx,Dg+s,Do=rx,Fug=rw,Fo=r /home/greenc/toolforge/awsexp/www/ login.toolforge.org:/data/project/botwikiawk/www/static/awsexp/
+#endif
+
+# archivebak: local backup to 192.168.1.16 (NOT toolforge). The recovered original was malformed
+# (unterminated -e quote); left disabled. Re-author fully before use.
+#if($1 == "archivebak") then
+#  /usr/bin/rsync -t -u -W -a --delete -e "/usr/bin/ssh" --rsync-path=/usr/bin/rsync --stats --progress /home/greenc/chico/Archive/ greenc@192.168.1.16:/home/greenc/Backup/Archive/
+#endif
